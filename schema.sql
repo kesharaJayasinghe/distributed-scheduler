@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS tasks (
+    id UUID PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    payload JSONB NOT NULL,
+    due_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF  NOT EXISTS idx_status_due_at ON tasks(status, due_at);
