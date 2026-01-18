@@ -32,7 +32,7 @@ func main() {
 	for {
 		// find due tasks
 		ctx := context.Background()
-		tasks, err := taskRepo.ListDueTasks(ctx)
+		tasks, err := taskRepo.ClaimDueTasks(ctx)
 		if err != nil {
 			log.Printf("Error fetching tasks: %v", err)
 			time.Sleep(5 * time.Second) // Backoff on error

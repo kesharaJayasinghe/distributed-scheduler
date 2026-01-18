@@ -33,18 +33,31 @@ func (r *Repository) Create(ctx context.Context, t *Task) error {
 	return nil
 }
 
-// Find tasks that are ready to run
-func (r *Repository) ListDueTasks(ctx context.Context) ([]Task, error) {
-	// Limit to 10
+// Find tasks that are due and mark as 'RUNNING'
+func (r *Repository) ClaimDueTasks(ctx context.Context) ([]Task, error) {
+
+	// Begin a transaction
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)	// Defer rollback in case of error
+
 	query := `
-		SELECT id, status, payload, due_at, created_at
-		FROM tasks
-		WHERE status = 'PENDING' AND due_at <= NOW()
-		ORDER BY due_at ASC
-		LIMIT 10
+		UPDATE tasks
+		SET status = 'RUNNING', picked_at = NOW()
+		WHERE id IN (
+			SELECT id
+			FROM tasks
+			WHERE status = 'PENDING' AND due_at <= NOW()
+			ORDER BY due_at ASC
+			LIMIT 10
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING id, status, payload, due_at, created_at
 	`
 
-	rows, err := r.db.Query(ctx, query)
+	rows, err := tx.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +71,12 @@ func (r *Repository) ListDueTasks(ctx context.Context) ([]Task, error) {
 		}
 		tasks = append(tasks, t)
 	}
+
+	// Commit the transaction to finalize the 'RUNNING' state
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	
 	return tasks, nil
 }
 
