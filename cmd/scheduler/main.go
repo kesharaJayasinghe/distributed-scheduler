@@ -26,6 +26,24 @@ func main() {
 
 	taskRepo := task.NewRepository(dbPool)
 
+	// Start background cleaner
+	go func() {
+		// Run check every 1 minute
+		ticker := time.NewTicker(1 * time.Minute)
+		for range ticker.C {
+			log.Println("Checking for zombie tasks...")
+
+			count, err := taskRepo.ResetZombieTasks(context.Background(), 2*time.Minute)
+			if err != nil {
+				log.Printf("Error cleaning zombie tasks: %v", err)
+			}
+
+			if count > 0 {
+				log.Printf("Rescued %d zombie tasks! Added back to pending queue.", count)
+			}
+		}
+	}()
+
 	log.Println("Scheduler started, polling for tasks...")
 
 	// Polling loop
@@ -49,7 +67,8 @@ func main() {
 			log.Printf("Found task %s. Executing...", t.ID)
 
 			// Simulate task
-			time.Sleep(500 * time.Millisecond)
+			// time.Sleep(500 * time.Millisecond)
+			time.Sleep(30 * time.Second) // Simulate longer task execution
 
 			// Mark as done
 			if err := taskRepo.UpdateStatus(ctx, t.ID, "COMPLETED"); err != nil {

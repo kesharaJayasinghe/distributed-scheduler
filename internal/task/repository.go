@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -76,7 +77,7 @@ func (r *Repository) ClaimDueTasks(ctx context.Context) ([]Task, error) {
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	
+
 	return tasks, nil
 }
 
@@ -84,4 +85,24 @@ func (r *Repository) ClaimDueTasks(ctx context.Context) ([]Task, error) {
 func (r *Repository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	_, err := r.db.Exec(ctx, "UPDATE tasks SET status = $1 WHERE id = $2", status, id)
 	return err
+}
+
+// Find task stuck in RUNNING state for too long and reset to PENDING
+func (r *Repository) ResetZombieTasks(ctx context.Context, maxDuration time.Duration) (int64, error) {
+	// Calculate the cutoff time. Any task started before this time is considered dead.
+	cutoff := time.Now().Add(-maxDuration)
+
+	query := `
+		UPDATE tasks
+		SET status = 'PENDING', picked_at = NULL
+		WHERE status = 'RUNNING'
+		AND picked_at < $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, cutoff)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
 }
